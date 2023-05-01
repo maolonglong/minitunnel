@@ -11,19 +11,20 @@ import (
 	"github.com/google/uuid"
 	"github.com/oklog/run"
 
-	"go.chensl.me/minitunnel/internal/codec"
-	"go.chensl.me/minitunnel/internal/msg"
 	"go.chensl.me/minitunnel/internal/netutil"
 )
 
-const _controlPort = 6101
+const (
+	_controlPort    = 6101
+	_networkTimeout = 3 * time.Second
+)
 
 type Server struct {
 	heartbeatInterval time.Duration
 	conns             sync.Map
 }
 
-func NewServer(controlPort int, heartbeatInterval time.Duration) *Server {
+func NewServer(heartbeatInterval time.Duration) *Server {
 	return &Server{
 		heartbeatInterval: heartbeatInterval,
 	}
@@ -53,14 +54,14 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) handleConn(conn net.Conn) error {
-	c := codec.NewDelimiterCodec(conn)
-	defer c.Close()
+	defer conn.Close()
+	codec := newMsgCodec(conn)
 
-	cmd, err := c.ReadCommand()
+	msg, err := codec.readMsgTimeout()
 	if err != nil {
 		return err
 	}
-	switch cmd.Name {
+	switch msg[0] {
 	case "hello":
 		log.Info("new client")
 
@@ -75,7 +76,7 @@ func (s *Server) handleConn(conn net.Conn) error {
 			return err
 		}
 
-		if err := c.WriteCommand(msg.C("hello", port)); err != nil {
+		if err := codec.writeMsg("hello", port); err != nil {
 			return err
 		}
 
@@ -87,7 +88,7 @@ func (s *Server) handleConn(conn net.Conn) error {
 			for {
 				select {
 				case <-timer.C:
-					if err := c.WriteCommand(msg.C("heartbeat")); err != nil {
+					if err := codec.writeMsg("heartbeat"); err != nil {
 						return err
 					}
 				case <-exitCh:
@@ -107,7 +108,7 @@ func (s *Server) handleConn(conn net.Conn) error {
 					return nil
 				default:
 				}
-				_ = ln.SetDeadline(time.Now().Add(3 * time.Second))
+				_ = ln.SetDeadline(time.Now().Add(_networkTimeout))
 				conn2, err := ln.Accept()
 				if err != nil {
 					if operr, ok := err.(*net.OpError); ok && operr.Timeout() {
@@ -126,7 +127,7 @@ func (s *Server) handleConn(conn net.Conn) error {
 					}
 				})
 
-				if err := c.WriteCommand(msg.C("connection", id)); err != nil {
+				if err := codec.writeMsg("connection", id); err != nil {
 					return err
 				}
 			}
@@ -137,13 +138,13 @@ func (s *Server) handleConn(conn net.Conn) error {
 		return g.Run()
 
 	case "accept":
-		if len(cmd.Args) != 1 {
+		if len(msg) != 2 {
 			return errors.New("invalid command")
 		}
-		log.Info("forwarding connection", "id", cmd.Args[0])
-		v, ok := s.conns.LoadAndDelete(cmd.Args[0])
+		log.Info("forwarding connection", "id", msg[1])
+		v, ok := s.conns.LoadAndDelete(msg[1])
 		if !ok {
-			log.Warn("missing connection", "id", cmd.Args[0])
+			log.Warn("missing connection", "id", msg[1])
 			return nil
 		}
 		conn2 := v.(net.Conn)

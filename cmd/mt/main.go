@@ -72,7 +72,6 @@ func main() {
 						cli.ShowSubcommandHelpAndExit(cCtx, 2)
 					}
 					return tunnel.NewServer(
-						cCtx.Int("control-port"),
 						cCtx.Duration("heartbeat-interval"),
 					).Run()
 				},

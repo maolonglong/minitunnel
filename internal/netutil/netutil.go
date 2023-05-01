@@ -17,7 +17,8 @@ func Proxy(c1 net.Conn, c2 net.Conn) error {
 		if err != nil && !isConnClosed(err) {
 			return err
 		}
-		return c1.Close()
+		_ = c1.Close()
+		return nil
 	}, func(_ error) {
 		_ = c2.Close()
 	})
@@ -27,7 +28,8 @@ func Proxy(c1 net.Conn, c2 net.Conn) error {
 		if err != nil && !isConnClosed(err) {
 			return err
 		}
-		return c2.Close()
+		_ = c2.Close()
+		return nil
 	}, func(_ error) {
 		_ = c1.Close()
 	})

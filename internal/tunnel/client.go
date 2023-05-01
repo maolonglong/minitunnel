@@ -7,13 +7,12 @@ import (
 
 	"github.com/charmbracelet/log"
 
-	"go.chensl.me/minitunnel/internal/codec"
-	"go.chensl.me/minitunnel/internal/msg"
 	"go.chensl.me/minitunnel/internal/netutil"
 )
 
 type Client struct {
-	conn      codec.Codec
+	conn      net.Conn
+	codec     *msgCodec
 	srvAddr   string
 	localAddr string
 }
@@ -24,33 +23,34 @@ func NewClient(
 	localPort int,
 ) (*Client, error) {
 	srvAddr := net.JoinHostPort(to, strconv.FormatInt(_controlPort, 10))
-	raw, err := net.Dial("tcp", srvAddr)
+	conn, err := net.DialTimeout("tcp", srvAddr, _networkTimeout)
 	if err != nil {
 		return nil, err
 	}
 
-	conn := codec.NewDelimiterCodec(raw)
-	if err := conn.WriteCommand(msg.C("hello")); err != nil {
+	codec := newMsgCodec(conn)
+	if err := codec.writeMsg("hello"); err != nil {
 		return nil, err
 	}
 
-	cmd, err := conn.ReadCommand()
+	msg, err := codec.readMsgTimeout()
 	if err != nil {
 		return nil, err
 	}
 
-	switch cmd.Name {
+	switch msg[0] {
 	case "hello":
-		if len(cmd.Args) != 1 {
+		if len(msg) != 2 {
 			return nil, errors.New("invalid command")
 		}
-		log.Infof("listening at: tcp://%v", net.JoinHostPort(to, cmd.Args[0]))
+		log.Infof("listening at: tcp://%v", net.JoinHostPort(to, msg[1]))
 	default:
 		return nil, errors.New("unexpected initial non-hello message")
 	}
 
 	return &Client{
 		conn:    conn,
+		codec:   codec,
 		srvAddr: srvAddr,
 		localAddr: net.JoinHostPort(
 			localHost,
@@ -62,30 +62,30 @@ func NewClient(
 func (c *Client) Run() error {
 	defer c.conn.Close()
 	for {
-		cmd, err := c.conn.ReadCommand()
+		msg, err := c.codec.readMsg()
 		if err != nil {
 			return err
 		}
 
-		switch cmd.Name {
+		switch msg[0] {
 		case "hello":
 			log.Warn("unexpected hello")
 		case "heartbeat":
 		case "connection":
-			if len(cmd.Args) != 1 {
+			if len(msg) != 2 {
 				return errors.New("invalid command")
 			}
 			go func() {
-				if err := c.handleConn(cmd.Args[0]); err != nil {
+				if err := c.handleConn(msg[1]); err != nil {
 					log.Error(
 						"connection exited with error",
 						"id",
-						cmd.Args[0],
+						msg[1],
 						"err",
 						err,
 					)
 				} else {
-					log.Info("connection exited", "id", cmd.Args[0])
+					log.Info("connection exited", "id", msg[1])
 				}
 			}()
 		}
@@ -93,17 +93,17 @@ func (c *Client) Run() error {
 }
 
 func (c *Client) handleConn(id string) error {
-	localConn, err := net.Dial("tcp", c.localAddr)
+	localConn, err := net.DialTimeout("tcp", c.localAddr, _networkTimeout)
 	if err != nil {
 		return err
 	}
 
-	remoteConn, err := net.Dial("tcp", c.srvAddr)
+	remoteConn, err := net.DialTimeout("tcp", c.srvAddr, _networkTimeout)
 	if err != nil {
 		return err
 	}
 
-	if err := codec.NewDelimiterCodec(remoteConn).WriteCommand(msg.C("accept", id)); err != nil {
+	if err := newMsgCodec(remoteConn).writeMsg("accept", id); err != nil {
 		return err
 	}
 
