@@ -9,25 +9,18 @@ import (
 
 	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
-	"github.com/oklog/run"
 
 	"go.chensl.me/minitunnel/internal/netutil"
 )
 
-const (
-	_controlPort    = 6101
-	_networkTimeout = 3 * time.Second
-)
+const _controlPort = 6101
 
 type Server struct {
-	heartbeatInterval time.Duration
-	conns             sync.Map
+	conns sync.Map
 }
 
-func NewServer(heartbeatInterval time.Duration) *Server {
-	return &Server{
-		heartbeatInterval: heartbeatInterval,
-	}
+func NewServer() *Server {
+	return &Server{}
 }
 
 func (s *Server) Run() error {
@@ -80,62 +73,34 @@ func (s *Server) handleConn(conn net.Conn) error {
 			return err
 		}
 
-		var g run.Group
-
-		exitCh := make(chan struct{})
-		g.Add(func() error {
-			timer := time.NewTicker(s.heartbeatInterval)
-			for {
-				select {
-				case <-timer.C:
-					if err := codec.writeMsg("heartbeat"); err != nil {
-						return err
-					}
-				case <-exitCh:
-					timer.Stop()
-					return nil
-				}
+		for {
+			if err := codec.writeMsg("heartbeat"); err != nil {
+				return nil
 			}
-		}, func(_ error) {
-			close(exitCh)
-		})
 
-		exitCh2 := make(chan struct{})
-		g.Add(func() error {
-			for {
-				select {
-				case <-exitCh2:
-					return nil
-				default:
+			_ = ln.SetDeadline(time.Now().Add(500 * time.Millisecond))
+			conn2, err := ln.Accept()
+			if err != nil {
+				if operr, ok := err.(*net.OpError); ok && operr.Timeout() {
+					continue
 				}
-				_ = ln.SetDeadline(time.Now().Add(_networkTimeout))
-				conn2, err := ln.Accept()
-				if err != nil {
-					if operr, ok := err.(*net.OpError); ok && operr.Timeout() {
-						continue
-					}
-					return err
-				}
-
-				id := uuid.NewString()
-				s.conns.Store(id, conn2)
-
-				time.AfterFunc(10*time.Second, func() {
-					_, ok := s.conns.LoadAndDelete(id)
-					if ok {
-						log.Warn("removed stale connection", "id", id)
-					}
-				})
-
-				if err := codec.writeMsg("connection", id); err != nil {
-					return err
-				}
+				return err
 			}
-		}, func(_ error) {
-			close(exitCh2)
-		})
 
-		return g.Run()
+			id := uuid.NewString()
+			s.conns.Store(id, conn2)
+
+			time.AfterFunc(10*time.Second, func() {
+				_, ok := s.conns.LoadAndDelete(id)
+				if ok {
+					log.Warn("removed stale connection", "id", id)
+				}
+			})
+
+			if err := codec.writeMsg("connection", id); err != nil {
+				return err
+			}
+		}
 
 	case "accept":
 		if len(msg) != 2 {

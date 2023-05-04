@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+var _zero time.Time
+
+const _networkTimeout = 3 * time.Second
+
 type msgCodec struct {
 	inner net.Conn
 	rw    *bufio.ReadWriter
@@ -24,6 +28,16 @@ func newMsgCodec(conn net.Conn) *msgCodec {
 }
 
 func (c *msgCodec) readMsg() ([]string, error) {
+	return c._readMsg(_zero)
+}
+
+func (c *msgCodec) readMsgTimeout() ([]string, error) {
+	return c._readMsg(time.Now().Add(_networkTimeout))
+}
+
+func (c *msgCodec) _readMsg(deadline time.Time) ([]string, error) {
+	_ = c.inner.SetReadDeadline(deadline)
+
 	l, err := c.rw.ReadByte()
 	if err != nil {
 		return nil, err
@@ -41,11 +55,6 @@ func (c *msgCodec) readMsg() ([]string, error) {
 	}
 
 	return msg, nil
-}
-
-func (c *msgCodec) readMsgTimeout() ([]string, error) {
-	_ = c.inner.SetReadDeadline(time.Now().Add(_networkTimeout))
-	return c.readMsg()
 }
 
 func (c msgCodec) writeMsg(msg ...string) error {

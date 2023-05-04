@@ -4,3 +4,7 @@ build:
 fmt:
   gosimports -local go.chensl.me -w .
   golines --max-len=88 --base-formatter=gofumpt -w .
+
+clean:
+  rm -rf dist
+  rm -f mt

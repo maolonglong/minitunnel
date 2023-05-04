@@ -59,27 +59,17 @@ func main() {
 			{
 				Name:  "server",
 				Usage: "runs the remote proxy server.",
-				Flags: []cli.Flag{
-					&cli.DurationFlag{
-						Name:    "heartbeat-interval",
-						Aliases: []string{"i"},
-						Value:   10 * time.Second,
-						Usage:   "specifies at what interval heartbeats are sent to the client",
-					},
-				},
 				Action: func(cCtx *cli.Context) error {
 					if cCtx.NArg() != 0 {
 						cli.ShowSubcommandHelpAndExit(cCtx, 2)
 					}
-					return tunnel.NewServer(
-						cCtx.Duration("heartbeat-interval"),
-					).Run()
+					return tunnel.NewServer().Run()
 				},
 			},
 		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		log.Error("", "err", err)
+		log.Error("run app failed", "err", err)
 	}
 }

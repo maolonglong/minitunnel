@@ -43,7 +43,7 @@ func NewClient(
 		if len(msg) != 2 {
 			return nil, errors.New("invalid command")
 		}
-		log.Infof("listening at: tcp://%v", net.JoinHostPort(to, msg[1]))
+		log.Infof("mt server listening at: tcp://%v", net.JoinHostPort(to, msg[1]))
 	default:
 		return nil, errors.New("unexpected initial non-hello message")
 	}
@@ -77,13 +77,7 @@ func (c *Client) Run() error {
 			}
 			go func() {
 				if err := c.handleConn(msg[1]); err != nil {
-					log.Error(
-						"connection exited with error",
-						"id",
-						msg[1],
-						"err",
-						err,
-					)
+					log.Error("connection exited with error", "id", msg[1], "err", err)
 				} else {
 					log.Info("connection exited", "id", msg[1])
 				}
