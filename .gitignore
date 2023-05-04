@@ -1,18 +1,18 @@
-# Ignore everything
-*
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 
-# But not these files...
-!/.gitignore
+# Test binary, built with `go test -c`
+*.test
 
-!*.go
-!go.sum
-!go.mod
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
 
-!README.md
-!LICENSE
+# Dependency directories (remove the comment below to include it)
+# vendor/
 
-!justfile
-!.goreleaser.yaml
-
-# ...even if they are in subdirectories
-!*/
+# Go workspace file
+go.work

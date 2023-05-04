@@ -9,7 +9,7 @@ import (
 	"github.com/oklog/run"
 )
 
-func Proxy(c1 net.Conn, c2 net.Conn) error {
+func Proxy(c1, c2 net.Conn) error {
 	var g run.Group
 
 	g.Add(func() error {
