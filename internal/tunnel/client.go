@@ -94,6 +94,7 @@ func (c *Client) handleConn(id string) error {
 
 	remoteConn, err := net.DialTimeout("tcp", c.srvAddr, _networkTimeout)
 	if err != nil {
+		_ = localConn.Close()
 		return err
 	}
 

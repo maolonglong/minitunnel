@@ -91,8 +91,9 @@ func (s *Server) handleConn(conn net.Conn) error {
 			s.conns.Store(id, conn2)
 
 			time.AfterFunc(10*time.Second, func() {
-				_, ok := s.conns.LoadAndDelete(id)
+				conn2, ok := s.conns.LoadAndDelete(id)
 				if ok {
+					_ = (conn2.(net.Conn)).Close()
 					log.Warn("removed stale connection", "id", id)
 				}
 			})
