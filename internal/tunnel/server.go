@@ -36,17 +36,19 @@ func (s *Server) Run() error {
 		if err != nil {
 			return err
 		}
+		logger := log.With("client_addr", conn.RemoteAddr())
+		logger.Info("new client")
 		go func() {
-			if err := s.handleConn(conn); err != nil {
-				log.Error("connection exited with error", "err", err)
+			if err := s.handleConn(conn, logger); err != nil {
+				logger.Error("client exited with error", "err", err)
 			} else {
-				log.Info("connection exited")
+				logger.Info("client exited")
 			}
 		}()
 	}
 }
 
-func (s *Server) handleConn(conn net.Conn) error {
+func (s *Server) handleConn(conn net.Conn, logger *log.Logger) error {
 	defer conn.Close()
 	codec := newMsgCodec(conn)
 
@@ -56,8 +58,6 @@ func (s *Server) handleConn(conn net.Conn) error {
 	}
 	switch msg[0] {
 	case "hello":
-		log.Info("new client")
-
 		addr, _ := net.ResolveTCPAddr("tcp", ":0")
 		ln, err := net.ListenTCP("tcp", addr)
 		if err != nil {
@@ -81,7 +81,8 @@ func (s *Server) handleConn(conn net.Conn) error {
 			_ = ln.SetDeadline(time.Now().Add(500 * time.Millisecond))
 			conn2, err := ln.Accept()
 			if err != nil {
-				if operr, ok := err.(*net.OpError); ok && operr.Timeout() {
+				var operr *net.OpError
+				if errors.As(err, &operr) && operr.Timeout() {
 					continue
 				}
 				return err
@@ -93,8 +94,8 @@ func (s *Server) handleConn(conn net.Conn) error {
 			time.AfterFunc(10*time.Second, func() {
 				conn2, ok := s.conns.LoadAndDelete(id)
 				if ok {
-					_ = (conn2.(net.Conn)).Close()
-					log.Warn("removed stale connection", "id", id)
+					_ = conn2.(net.Conn).Close()
+					logger.Warn("removed stale connection", "id", id)
 				}
 			})
 
@@ -107,14 +108,15 @@ func (s *Server) handleConn(conn net.Conn) error {
 		if len(msg) != 2 {
 			return errors.New("invalid command")
 		}
-		log.Info("forwarding connection", "id", msg[1])
+		logger.Info("forwarding connection", "id", msg[1])
 		v, ok := s.conns.LoadAndDelete(msg[1])
 		if !ok {
-			log.Warn("missing connection", "id", msg[1])
+			logger.Warn("missing connection", "id", msg[1])
 			return nil
 		}
 		conn2 := v.(net.Conn)
-		return netutil.Proxy(conn, conn2)
+		netutil.Proxy(conn, conn2)
+		return nil
 
 	default:
 		return errors.New("invalid command")

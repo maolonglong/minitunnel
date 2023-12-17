@@ -29,7 +29,7 @@ var _ = Describe("HTTP", func() {
 		DeferCleanup(gexec.CleanupBuildArtifacts)
 
 		srv = httptest.NewServer(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				fmt.Fprintf(w, "Hello World! %s", time.Now())
 			}),
 		)

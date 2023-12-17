@@ -1,5 +1,0 @@
-{
-  "go.alternateTools": { "customFormatter": "gosimports" },
-  "go.formatFlags": ["-local=go.chensl.me"],
-  "go.formatTool": "custom"
-}

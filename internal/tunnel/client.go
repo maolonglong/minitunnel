@@ -75,11 +75,14 @@ func (c *Client) Run() error {
 			if len(msg) != 2 {
 				return errors.New("invalid command")
 			}
+			id := msg[1]
+			logger := log.With("id", id)
+			logger.Info("new connection")
 			go func() {
-				if err := c.handleConn(msg[1]); err != nil {
-					log.Error("connection exited with error", "id", msg[1], "err", err)
+				if err := c.handleConn(id); err != nil {
+					logger.Error("connection exited with error", "err", err)
 				} else {
-					log.Info("connection exited", "id", msg[1])
+					logger.Info("connection exited")
 				}
 			}()
 		}
@@ -102,5 +105,6 @@ func (c *Client) handleConn(id string) error {
 		return err
 	}
 
-	return netutil.Proxy(localConn, remoteConn)
+	netutil.Proxy(localConn, remoteConn)
+	return nil
 }
